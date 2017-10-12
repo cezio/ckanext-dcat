@@ -14,6 +14,7 @@ from rdflib.namespace import Namespace, RDF
 import ckan.plugins as p
 
 from ckanext.dcat.utils import catalog_uri, dataset_uri, url_to_rdflib_format
+from ckanext.dcat.profiles import DCAT, DCT, FOAF
 
 
 HYDRA = Namespace('http://www.w3.org/ns/hydra/core#')
@@ -320,7 +321,9 @@ class RDFSerializer(RDFProcessor):
             for dataset_dict in dataset_dicts:
                 dataset_ref = self.graph_from_dataset(dataset_dict)
 
-                self.g.add((catalog_ref, DCAT.dataset, dataset_ref))
+                cat_ref = self.graph_from_source_catalog(catalog_ref, dataset_dict, dataset_ref)
+                self.g.add((cat_ref or catalog_ref, DCAT.dataset, dataset_ref))
+
 
         if pagination_info:
             self._add_pagination_triples(pagination_info)
@@ -329,6 +332,42 @@ class RDFSerializer(RDFProcessor):
         output = self.g.serialize(format=_format)
 
         return output
+
+    def graph_from_source_catalog(self, root_catalog_ref, dataset_dict, dataset_ref):
+        source_uri = None
+        source_title = None
+
+        g = self.g
+
+        for ex in dataset_dict.get('extras', []):
+            if ex['key'] == 'source_catalog_uri':
+                source_uri = ex['value']
+
+        for ex in dataset_dict.get('extras', []):
+            if ex['key'] == 'source_catalog_title':
+                source_title = ex['value']
+
+        if not source_uri:
+            return
+            
+        catalog_ref = URIRef(source_uri)
+
+        # Basic fields
+        items = [
+            ('title', DCT.title, source_title, Literal),
+            ('homepage', FOAF.homepage, source_uri, URIRef),
+        ]
+        for item in items:
+            key, predicate, value, _type = item
+            if value:
+                g.add((catalog_ref, predicate, _type(value)))
+        
+        g.add((root_catalog_ref, DCT.hasPart, catalog_ref))
+        g.add((catalog_ref, DCAT.dataset, dataset_ref))
+        g.add((catalog_ref, RDF.type, DCAT.Catalog))
+        return catalog_ref
+        
+
 
 
 if __name__ == '__main__':

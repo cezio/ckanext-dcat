@@ -532,6 +532,39 @@ class RDFProfile(object):
             return result['results'][0]['metadata_modified']
         return None
 
+    def _get_source_catalog(self, dataset_ref):
+        '''
+        Returns Catalog that is source for this dataset. 
+
+        Catalog referenced in dct:hasPart is returned, 
+        if dataset is linked there, otherwise main catalog 
+        will be returned.
+        '''
+
+        root = self._get_root()[0]
+        # subcats, should not have dct:hasPart
+        dataset_id = str(dataset_ref).split('/')[-1]
+
+        q = """SELECT ?cat where
+             { ?cat ?p ?o
+             { {  ?cat dcat:dataset <%s> } 
+                UNION { ?cat dcatapit:Dataset <%s> }} .
+                MINUS { <%s> ?p ?o }
+               } """ % (dataset_ref, dataset_ref, root)
+        catalogs = list(self.g.query(q))
+        return catalogs[0] if catalogs else root
+        
+        
+
+    def _get_root(self):
+
+        q = ("select ?cat where "
+             " {?cat rdf:type dcat:Catalog ."
+             " FILTER EXISTS {?cat dct:hasPart ?other}}")
+             
+        catalog = self.g.query(q)
+        return list(catalog)[0]
+
     # Public methods for profiles to implement
 
     def parse_dataset(self, dataset_dict, dataset_ref):
@@ -587,6 +620,7 @@ class EuropeanDCATAPProfile(RDFProfile):
     '''
 
     def parse_dataset(self, dataset_dict, dataset_ref):
+        catalog_src = self._get_source_catalog(dataset_ref)
 
         dataset_dict['tags'] = []
         dataset_dict['extras'] = []
@@ -785,7 +819,6 @@ class EuropeanDCATAPProfile(RDFProfile):
         return dataset_dict
 
     def graph_from_dataset(self, dataset_dict, dataset_ref):
-
         g = self.g
 
         for prefix, namespace in namespaces.iteritems():
