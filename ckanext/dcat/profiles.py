@@ -12,6 +12,7 @@ from rdflib.namespace import Namespace, RDF, XSD, SKOS, RDFS
 
 from geomet import wkt, InvalidGeoJSONException
 
+from ckan.model.license import LicenseRegister
 from ckan.plugins import toolkit
 
 from ckanext.dcat.utils import resource_uri, publisher_uri_from_dataset_dict, DCAT_EXPOSE_SUBCATALOGS
@@ -69,6 +70,10 @@ class RDFProfile(object):
 
         self.compatibility_mode = compatibility_mode
 
+        # Cache for mappings of licenses URL/title to ID built when needed in
+        # _license().
+        self._licenceregister_cache = None
+
     def _datasets(self):
         '''
         Generator that returns all DCAT datasets on the graph
@@ -107,11 +112,11 @@ class RDFProfile(object):
 
         Both subject and predicate must be rdflib URIRef or BNode objects
 
-        If found, the unicode representation is returned, else None
+        If found, the unicode representation is returned, else an empty string
         '''
         for o in self.g.objects(subject, predicate):
             return unicode(o)
-        return None
+        return ''
 
     def _object_value_int(self, subject, predicate):
         '''
@@ -213,7 +218,7 @@ class RDFProfile(object):
         }
 
         Returns keys for uri, name, email, url and type with the values set to
-        None if they could not be found
+        an empty string if they could not be found
         '''
 
         publisher = {}
@@ -221,7 +226,7 @@ class RDFProfile(object):
         for agent in self.g.objects(subject, predicate):
 
             publisher['uri'] = (unicode(agent) if isinstance(agent,
-                                rdflib.term.URIRef) else None)
+                                rdflib.term.URIRef) else '')
 
             publisher['name'] = self._object_value(agent, FOAF.name)
 
@@ -240,7 +245,7 @@ class RDFProfile(object):
         Both subject and predicate must be rdflib URIRef or BNode objects
 
         Returns keys for uri, name and email with the values set to
-        None if they could not be found
+        an empty string if they could not be found
         '''
 
         contact = {}
@@ -248,7 +253,7 @@ class RDFProfile(object):
         for agent in self.g.objects(subject, predicate):
 
             contact['uri'] = (unicode(agent) if isinstance(agent,
-                              rdflib.term.URIRef) else None)
+                              rdflib.term.URIRef) else '')
 
             contact['name'] = self._object_value(agent, VCARD.fn)
 
@@ -309,6 +314,39 @@ class RDFProfile(object):
             'text': text,
             'geom': geom,
         }
+
+    def _license(self, dataset_ref):
+        '''
+        Returns a license identifier if one of the distributions license is
+        found in CKAN license registry. If no distribution's license matches,
+        an empty string is returned.
+
+        The first distribution with a license found in the registry is used so
+        that if distributions have different licenses we'll only get the first
+        one.
+        '''
+        if self._licenceregister_cache is not None:
+            license_uri2id, license_title2id = self._licenceregister_cache
+        else:
+            license_uri2id = {}
+            license_title2id = {}
+            for license_id, license in LicenseRegister().items():
+                license_uri2id[license.url] = license_id
+                license_title2id[license.title] = license_id
+            self._licenceregister_cache = license_uri2id, license_title2id
+
+        for distribution in self._distributions(dataset_ref):
+            # If distribution has a license, attach it to the dataset
+            license = self._object(distribution, DCT.license)
+            if license:
+                # Try to find a matching license comparing URIs, then titles
+                license_id = license_uri2id.get(license.toPython())
+                if not license_id:
+                    license_id = license_title2id.get(
+                        self._object_value(license, DCT.title))
+                if license_id:
+                    return license_id
+        return ''
 
     def _distribution_format(self, distribution, normalize_ckan_format=True):
         '''
@@ -759,7 +797,7 @@ class EuropeanDCATAPProfile(RDFProfile):
         # Dataset URI (explicitly show the missing ones)
         dataset_uri = (unicode(dataset_ref)
                        if isinstance(dataset_ref, rdflib.term.URIRef)
-                       else None)
+                       else '')
         dataset_dict['extras'].append({'key': 'uri', 'value': dataset_uri})
 
         # Source Catalog
@@ -767,6 +805,9 @@ class EuropeanDCATAPProfile(RDFProfile):
             src_data = self._extract_catalog_dict(catalog_src)
             dataset_dict['extras'].extend(src_data)
             
+        # License
+        if 'license_id' not in dataset_dict:
+            dataset_dict['license_id'] = self._license(dataset_ref)
 
         # Resources
         for distribution in self._distributions(dataset_ref):
@@ -834,7 +875,7 @@ class EuropeanDCATAPProfile(RDFProfile):
             resource_dict['uri'] = (unicode(distribution)
                                     if isinstance(distribution,
                                                   rdflib.term.URIRef)
-                                    else None)
+                                    else '')
 
             dataset_dict['resources'].append(resource_dict)
 
