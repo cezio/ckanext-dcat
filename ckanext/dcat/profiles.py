@@ -4,6 +4,7 @@ import json
 from dateutil.parser import parse as parse_date
 
 from pylons import config
+from paste.deploy.converters import asbool
 
 import rdflib
 from rdflib import URIRef, BNode, Literal
@@ -13,7 +14,7 @@ from geomet import wkt, InvalidGeoJSONException
 
 from ckan.plugins import toolkit
 
-from ckanext.dcat.utils import resource_uri, publisher_uri_from_dataset_dict
+from ckanext.dcat.utils import resource_uri, publisher_uri_from_dataset_dict, DCAT_EXPOSE_SUBCATALOGS
 
 DCT = Namespace("http://purl.org/dc/terms/")
 DCAT = Namespace("http://www.w3.org/ns/dcat#")
@@ -44,8 +45,10 @@ namespaces = {
 }
 
 
+
 class RDFProfile(object):
     '''Base class with helper methods for implementing RDF parsing profiles
+
 
        This class should not be used directly, but rather extended to create
        custom profiles
@@ -534,36 +537,33 @@ class RDFProfile(object):
 
     def _get_source_catalog(self, dataset_ref):
         '''
-        Returns Catalog that is source for this dataset. 
+        Returns Catalog reference that is source for this dataset. 
 
         Catalog referenced in dct:hasPart is returned, 
         if dataset is linked there, otherwise main catalog 
         will be returned.
+
+        This will not be used if ckanext.dcat.expose_subcatalogs
+        configuration option is set to False.
         '''
-
-        root = self._get_root()[0]
-        # subcats, should not have dct:hasPart
-        dataset_id = str(dataset_ref).split('/')[-1]
-
-        q = """SELECT ?cat where
-             { ?cat ?p ?o
-             { {  ?cat dcat:dataset <%s> } 
-                UNION { ?cat dcatapit:Dataset <%s> }} .
-                MINUS { <%s> ?p ?o }
-               } """ % (dataset_ref, dataset_ref, root)
-        catalogs = list(self.g.query(q))
-        return catalogs[0] if catalogs else root
-        
-        
-
+        if not asbool(config.get(DCAT_EXPOSE_SUBCATALOGS)):
+            return
+        cats = set(self.g.subjects(DCAT.dataset, dataset_ref))
+        root = self._get_root()
+        try:
+            cats.remove(root)
+        except KeyError:
+            pass
+        assert len(cats) in (0, 1,), "len %s" %cats
+        if cats:
+            return cats.pop()
+        return root
+    
     def _get_root(self):
-
-        q = ("select ?cat where "
-             " {?cat rdf:type dcat:Catalog ."
-             " FILTER EXISTS {?cat dct:hasPart ?other}}")
-             
-        catalog = self.g.query(q)
-        return list(catalog)[0]
+        roots = list(self.g.subjects(DCT.hasPart))
+        if not roots:
+            roots = list(self.g.subjects(RDF.type, DCAT.Catalog))
+        return roots[0]
 
     # Public methods for profiles to implement
 
@@ -580,6 +580,35 @@ class RDFProfile(object):
         or `package_update`
         '''
         return dataset_dict
+
+    def _extract_catalog_dict(self, catalog_ref):
+        '''
+        Returns list of key/value dictionaries with catalog
+        '''
+
+        #('title', DCT.title, config.get('ckan.site_title'), Literal),
+        #('description', DCT.description, config.get('ckan.site_description'), Literal),
+        #('homepage', FOAF.homepage, config.get('ckan.site_url'), URIRef),
+        #('language', DCT.language, config.get('ckan.locale_default', 'en'), Literal),
+        #('publisher', 
+        #('modified', 
+
+        out = []
+        sources = (('source_title', DCT.title,),
+                   ('source_description', DCT.description,),
+                   ('source_homepage', FOAF.homepage,),
+                   ('source_language', DCT.language,),
+                   ('source_modified', DCT.modified,),)
+
+        for key, predicate in sources:
+            val = self._object_value(catalog_ref, predicate)
+            #if val is None:
+            #    raise ValueError("No value for %s in %s" % (predicate, catalog_ref))
+            # store with class name
+            out.append({'key': key, 'value': val})
+
+        out.append({'key': 'source_publisher', 'value': json.dumps(self._publisher(catalog_ref, DCT.publisher))})
+        return out
 
     def graph_from_catalog(self, catalog_dict, catalog_ref):
         '''
@@ -732,6 +761,12 @@ class EuropeanDCATAPProfile(RDFProfile):
                        if isinstance(dataset_ref, rdflib.term.URIRef)
                        else None)
         dataset_dict['extras'].append({'key': 'uri', 'value': dataset_uri})
+
+        # Source Catalog
+        if catalog_src:
+            src_data = self._extract_catalog_dict(catalog_src)
+            dataset_dict['extras'].extend(src_data)
+            
 
         # Resources
         for distribution in self._distributions(dataset_ref):
