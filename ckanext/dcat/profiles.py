@@ -624,13 +624,6 @@ class RDFProfile(object):
         Returns list of key/value dictionaries with catalog
         '''
 
-        #('title', DCT.title, config.get('ckan.site_title'), Literal),
-        #('description', DCT.description, config.get('ckan.site_description'), Literal),
-        #('homepage', FOAF.homepage, config.get('ckan.site_url'), URIRef),
-        #('language', DCT.language, config.get('ckan.locale_default', 'en'), Literal),
-        #('publisher', 
-        #('modified', 
-
         out = []
         sources = (('source_title', DCT.title,),
                    ('source_description', DCT.description,),
@@ -640,9 +633,6 @@ class RDFProfile(object):
 
         for key, predicate in sources:
             val = self._object_value(catalog_ref, predicate)
-            #if val is None:
-            #    raise ValueError("No value for %s in %s" % (predicate, catalog_ref))
-            # store with class name
             out.append({'key': key, 'value': val})
 
         out.append({'key': 'source_publisher', 'value': json.dumps(self._publisher(catalog_ref, DCT.publisher))})

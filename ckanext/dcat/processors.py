@@ -430,7 +430,7 @@ Operation mode.
 
     contents = args.file.read()
 
-    config.update({'ckanext.dcat.expose_subcatalogs': args.subcatalogs})
+    config.update({DCAT_EXPOSE_SUBCATALOGS: args.subcatalogs})
 
     if args.mode == 'produce':
         serializer = RDFSerializer(profiles=args.profile,
