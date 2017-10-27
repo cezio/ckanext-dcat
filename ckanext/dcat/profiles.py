@@ -625,17 +625,17 @@ class RDFProfile(object):
         '''
 
         out = []
-        sources = (('source_title', DCT.title,),
-                   ('source_description', DCT.description,),
-                   ('source_homepage', FOAF.homepage,),
-                   ('source_language', DCT.language,),
-                   ('source_modified', DCT.modified,),)
+        sources = (('source_catalog_title', DCT.title,),
+                   ('source_catalog_description', DCT.description,),
+                   ('source_catalog_homepage', FOAF.homepage,),
+                   ('source_catalog_language', DCT.language,),
+                   ('source_catalog_modified', DCT.modified,),)
 
         for key, predicate in sources:
             val = self._object_value(catalog_ref, predicate)
             out.append({'key': key, 'value': val})
 
-        out.append({'key': 'source_publisher', 'value': json.dumps(self._publisher(catalog_ref, DCT.publisher))})
+        out.append({'key': 'source_catalog_publisher', 'value': json.dumps(self._publisher(catalog_ref, DCT.publisher))})
         return out
 
     def graph_from_catalog(self, catalog_dict, catalog_ref):
@@ -791,7 +791,7 @@ class EuropeanDCATAPProfile(RDFProfile):
         dataset_dict['extras'].append({'key': 'uri', 'value': dataset_uri})
 
         # Source Catalog
-        if catalog_src:
+        if catalog_src is not None:
             src_data = self._extract_catalog_dict(catalog_src)
             dataset_dict['extras'].extend(src_data)
             
