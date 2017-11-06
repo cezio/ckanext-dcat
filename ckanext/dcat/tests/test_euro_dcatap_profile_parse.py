@@ -587,6 +587,40 @@ class TestEuroDCATAPProfileParsing(BaseParseTest):
         eq_(_get_extra_value('dcat_publisher_email'), 'contact@some.org')
         eq_(_get_extra_value('language'), 'ca,en,es')
 
+    def test_parse_subcatalog(self):
+        contents = self._get_file_contents('dataset_subcatalog.rdf')
+
+        p = RDFParser(profiles=['euro_dcat_ap'])
+
+        p.parse(contents)
+
+        # at least one subcatalog with hasPart
+        subcatalogs = list(p.g.objects(None, DCT.hasPart))
+        assert_true(subcatalogs)
+
+        # at least one dataset in subcatalogs
+        subdatasets = []
+        for subcatalog in subcatalogs:
+            datasets = p.g.objects(subcatalog, DCAT.dataset)
+            for dataset in datasets:
+                subdatasets.append((dataset,subcatalog,))
+        assert_true(subdatasets)
+        
+        datasets = dict([(d['title'], d) for d in p.datasets()])
+
+        for subdataset, subcatalog in subdatasets:
+            title = unicode(list(p.g.objects(subdataset, DCT.title))[0])
+            dataset = datasets[title]
+            has_subcat = False
+            for ex in dataset['extras']:
+                exval = ex['value']
+                exkey = ex['key']
+                if exkey == 'source_catalog_homepage':
+                    has_subcat = True
+                    eq_(exval, unicode(subcatalog))
+            # check if we had subcatalog in extras
+            assert_true(has_subcat)
+
 
 class TestEuroDCATAPProfileParsingSpatial(BaseParseTest):
 
