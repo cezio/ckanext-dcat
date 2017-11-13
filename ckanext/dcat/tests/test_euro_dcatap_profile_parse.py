@@ -3,6 +3,8 @@ import json
 
 import nose
 
+from pylons import config
+
 from rdflib import Graph, URIRef, BNode, Literal
 from rdflib.namespace import RDF
 
@@ -16,6 +18,7 @@ except ImportError:
 from ckanext.dcat.processors import RDFParser, RDFSerializer
 from ckanext.dcat.profiles import (DCAT, DCT, ADMS, LOCN, SKOS, GSP, RDFS,
                                    GEOJSON_IMT)
+from ckanext.dcat.utils import DCAT_EXPOSE_SUBCATALOGS
 
 eq_ = nose.tools.eq_
 assert_true = nose.tools.assert_true
@@ -613,7 +616,7 @@ class TestEuroDCATAPProfileParsing(BaseParseTest):
         }
 
         s = RDFSerializer()
-
+        config[DCAT_EXPOSE_SUBCATALOGS] = 'true'
         s.serialize_catalog(catalog_dict, dataset_dicts=[dataset])
         g = s.g
 

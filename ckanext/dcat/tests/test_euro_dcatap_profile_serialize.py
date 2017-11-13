@@ -19,6 +19,7 @@ from ckanext.dcat import utils
 from ckanext.dcat.processors import RDFSerializer
 from ckanext.dcat.profiles import (DCAT, DCT, ADMS, XSD, VCARD, FOAF, SCHEMA,
                                    SKOS, LOCN, GSP, OWL, SPDX, GEOJSON_IMT)
+from ckanext.dcat.utils import DCAT_EXPOSE_SUBCATALOGS
 
 eq_ = nose.tools.eq_
 assert_true = nose.tools.assert_true
@@ -877,6 +878,7 @@ class TestEuroDCATAPProfileSerializeCatalog(BaseSerializeTest):
             'language': 'de',
         }
 
+        config[DCAT_EXPOSE_SUBCATALOGS] = 'true'
         s = RDFSerializer()
         g = s.g
 
