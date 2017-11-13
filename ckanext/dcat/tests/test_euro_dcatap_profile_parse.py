@@ -651,6 +651,7 @@ class TestEuroDCATAPProfileParsing(BaseParseTest):
             # check if we had subcatalog in extras
             assert_true(has_subcat)
 
+        config[DCAT_EXPOSE_SUBCATALOGS] = 'false'
 
 class TestEuroDCATAPProfileParsingSpatial(BaseParseTest):
 
@@ -893,5 +894,5 @@ class TestEuroDCATAPProfileParsingSpatial(BaseParseTest):
         p.g = g
 
         datasets = [d for d in p.datasets()]
-
+        
         eq_(len(datasets[0]['tags']), 3)

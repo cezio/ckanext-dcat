@@ -906,4 +906,4 @@ class TestEuroDCATAPProfileSerializeCatalog(BaseSerializeTest):
         dataset_title = list(g.objects(dataset_ref, DCT.title))
         assert_true(len(dataset_title) == 1)
         assert_true(unicode(dataset_title[0]) == dataset['title'])
-
+        config[DCAT_EXPOSE_SUBCATALOGS] = 'false'
